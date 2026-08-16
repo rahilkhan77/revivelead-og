@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ReviveLead
 
-## Getting Started
+Revenue recovery platform for real estate agencies in Dubai, Qatar, Mumbai and Bangalore.
 
-First, run the development server:
+**Turn Lost Leads Into Revenue.**
+
+AI qualifies and drafts follow-ups. The product is the recovery loop: capture, follow up, reactivate, and book recovered revenue. It is not an AI chatbot.
+
+## Local setup
 
 ```bash
+npm install
+cp .env.example .env
+npm run db:setup
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Local database is SQLite (`DATABASE_URL="file:./dev.db"`). Production must use PostgreSQL.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Local demo (Al Noor Properties, Dubai) — not shown on the production landing page:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Owner: `owner@alnoor.ae` / `Demo1234!`
+- Manager: `fatima@alnoor.ae` / `Demo1234!`
+- Agent: `omar@alnoor.ae` / `Demo1234!`
 
-## Learn More
+New agencies sign up (Clerk when configured) and complete `/onboarding`. They are never placed in the Al Noor demo organization.
 
-To learn more about Next.js, take a look at the following resources:
+## Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run lint
+npm run typecheck
+npm run build
+npm test
+npm run db:seed
+npm run db:prod:migrate
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Production
 
-## Deploy on Vercel
+Billing is Paddle (Merchant of Record). Stripe is not used.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+See [docs/PRODUCTION.md](docs/PRODUCTION.md) for:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Environment variables
+- Supabase PostgreSQL (Prisma only — not Supabase Auth)
+- Clerk
+- Meta WhatsApp Cloud API
+- OpenAI / optional Puter (`LLM_PROVIDER`)
+- Resend
+- Paddle checkout and webhooks
+- n8n / API keys
+- Cron / follow-up worker
+- First-client onboarding
+- Deployment

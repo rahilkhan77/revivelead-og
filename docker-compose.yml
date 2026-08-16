@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: revivelead
+      POSTGRES_PASSWORD: revivelead
+      POSTGRES_DB: revivelead
+    ports:
+      - "5432:5432"
+    volumes:
+      - revivelead_pg:/var/lib/postgresql/data
+
+volumes:
+  revivelead_pg:
