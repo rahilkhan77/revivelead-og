@@ -1,10 +1,13 @@
 # ReviveLead production guide
 
-ReviveLead is a revenue recovery platform for real estate agencies. Local development stays on SQLite. Production must use PostgreSQL. Billing uses Paddle as Merchant of Record. Do not use Stripe.
+ReviveLead is a revenue recovery platform for real estate agencies. Local development stays on SQLite. Production must use PostgreSQL. Billing uses Razorpay for live subscriptions. Do not use Stripe.
+
+The Next.js app, including API routes, server actions, Prisma, Clerk, cron, and webhooks, lives in `frontend/`. Vercel Root Directory must be `frontend`. Do not split those routes into a separate backend.
 
 ## Local setup
 
 ```bash
+cd frontend
 npm install
 cp .env.example .env
 npm run db:setup
@@ -28,7 +31,7 @@ Copy `.env.example`. Never commit `.env` or real credentials.
 
 | Variable | Required | Notes |
 |---|---|---|
-| `DATABASE_URL` | Yes | SQLite `file:./dev.db` locally. PostgreSQL URL in production. |
+| `DATABASE_URL` | Yes | SQLite `file:./dev.db` locally. PostgreSQL URL in production. The app does not read `SUPABASE_*` variables. |
 | `AUTH_SECRET` | Yes | Long random string. `openssl rand -base64 32`. |
 | `AUTH_URL` | Yes | Public site URL, e.g. `https://app.revivelead.com`. |
 | `NEXT_PUBLIC_APP_URL` | Recommended | Same public URL. Used for checkout return links and emails. |
@@ -41,11 +44,15 @@ Copy `.env.example`. Never commit `.env` or real credentials.
 | `PUTER_API_KEY` | No | Server-side Puter token. Used when `LLM_PROVIDER=puter`. Never expose to the browser. |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | Production | Clerk is the production auth layer. App roles stay in Membership. |
 | `RESEND_API_KEY` / `EMAIL_FROM` | No locally | Invites, welcome, resets, and failure alerts. Default from-address can stay `onboarding@resend.dev` until a custom domain is verified. |
-| `PADDLE_API_KEY` | No locally | Server-side Paddle Billing API key. |
+| `RAZORPAY_KEY_ID` | For live billing | Razorpay Key ID. Passed to Checkout.js from the server. Never expose Key Secret. |
+| `RAZORPAY_KEY_SECRET` | For live billing | Server-side only. Used to create subscriptions and verify checkout signatures. |
+| `RAZORPAY_WEBHOOK_SECRET` | For webhook sync | Dashboard webhook signing secret. The webhook route fails closed (503) if this is empty. |
+| `RAZORPAY_PLAN_STARTER` / `RAZORPAY_PLAN_PRO` | For checkout | Razorpay plan IDs (`plan_...`). Enterprise stays sales-led. |
+| `PADDLE_API_KEY` | No locally | Unused while Razorpay keys are present. Fallback Paddle Billing API key. |
 | `PADDLE_CLIENT_TOKEN` | No locally | Paddle.js client token for overlay checkout. |
 | `PADDLE_WEBHOOK_SECRET` | No locally | Notification destination secret (`pdl_ntfset_...`). |
 | `PADDLE_ENVIRONMENT` | No | `sandbox` or `production`. |
-| `PADDLE_PRICE_STARTER` / `PADDLE_PRICE_PRO` / `PADDLE_PRICE_ENTERPRISE` | For checkout | Paddle price IDs (`pri_...`). |
+| `PADDLE_PRICE_STARTER` / `PADDLE_PRICE_PRO` / `PADDLE_PRICE_ENTERPRISE` | Fallback checkout | Paddle price IDs (`pri_...`). |
 
 WhatsApp tokens, SMTP passwords, and webhook secrets are **not** global env vars. Store them per organization in Settings → Integrations.
 
@@ -75,7 +82,7 @@ npx prisma migrate deploy --schema prisma/postgres/schema.prisma
 npx prisma generate
 ```
 
-`npm run build` calls `scripts/prepare-prisma.mjs`, which switches the Prisma provider to `postgresql` when `DATABASE_URL` starts with `postgres`. Local SQLite is left alone.
+`npm run build` calls `scripts/prepare-prisma.mjs`, which switches the Prisma provider to `postgresql` on Vercel or when `DATABASE_URL` starts with `postgres`. Local SQLite is left alone. Do not upload `.env` or `.env.local`; set production secrets in the Vercel dashboard.
 
 Do **not** run `npm run db:seed` in production unless you explicitly set `ALLOW_DEMO_SEED=yes`. New Dubai clients must never land in Al Noor Properties.
 
@@ -83,21 +90,28 @@ Prisma models, indexes, foreign keys, unique constraints, enums, timestamps, JSO
 
 ## Deployment
 
-1. Provision PostgreSQL and set the production environment variables on Vercel (or your host).
+Vercel settings:
+
+- Root Directory: `frontend`
+- Build command: `npm run build` (runs `scripts/prepare-prisma.mjs`, `prisma generate`, then `next build`)
+- Install command: `npm install`
+
+`frontend/vercel.json` is intentionally empty. Vercel Hobby cannot run a `*/10 * * * *` cron. Keep `GET /api/cron/follow-ups` and call it from an external scheduler with `Authorization: Bearer $CRON_SECRET`.
+
+1. Provision PostgreSQL and set the production environment variables in the Vercel dashboard (never commit secrets).
 2. Set webhook URLs to HTTPS:
    - WhatsApp: `https://YOUR_DOMAIN/api/webhooks/inbound`
+   - Razorpay: `https://YOUR_DOMAIN/api/webhooks/razorpay`
    - Paddle: `https://YOUR_DOMAIN/api/webhooks/paddle`
-3. Run `npx prisma migrate deploy --schema prisma/postgres/schema.prisma` against production Postgres **before** the first request.
-4. Deploy with `npm run build`.
+3. From `frontend/`, run `npx prisma migrate deploy --schema prisma/postgres/schema.prisma` against production Postgres **before** the first request.
+4. Deploy the `frontend` directory. Do not set production `DATABASE_URL` to SQLite.
 5. Do not seed Al Noor unless you explicitly asked for the demo tenant.
-6. Cron is configured in `vercel.json` every 10 minutes:
+6. Schedule follow-ups externally every 5–15 minutes:
 
 ```
 GET /api/cron/follow-ups
 Authorization: Bearer $CRON_SECRET
 ```
-
-Vercel Cron sends `CRON_SECRET` as that bearer token when the env var is set. You can also call the same URL every 5–15 minutes from an external scheduler.
 
 The follow-up worker claims jobs with a `PROCESSING` status so the same item is not sent twice.
 
@@ -126,8 +140,8 @@ Status in Settings: `CONNECTED`, `DISCONNECTED`, or `ERROR`.
 
 Webhook rules:
 
-- `GET /api/webhooks/inbound` answers Meta’s `hub.challenge`.
-- `POST /api/webhooks/inbound` accepts Meta payloads and custom JSON used by n8n.
+- `GET /api/webhooks/inbound` answers Meta’s `hub.challenge` and otherwise returns 403.
+- `POST /api/webhooks/inbound` accepts Meta payloads (signature required) and custom JSON authenticated by the integration secret.
 - The webhook never trusts `organizationId` from the body.
 - Organization is resolved from `phone_number_id` or the shared secret.
 - Duplicate Meta message IDs are ignored.
@@ -168,9 +182,32 @@ The widget key is public and only maps to an organization. Chat calls `POST /api
 3. Used for team invitations, welcome email, password/account notifications, follow-up failures, and automation failures.
 4. Production does not log invitation or recovery URLs or the API key.
 
-## Paddle setup
+## Razorpay setup
 
-Paddle replaces Stripe completely. Business logic talks to `PaymentProvider`; `PaddlePaymentProvider` is the current implementation.
+Razorpay is the production billing provider. Business logic talks to `PaymentProvider`; `RazorpayPaymentProvider` is used when `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` are set. Paddle remains in the codebase as a fallback only.
+
+1. Create live Razorpay plans that match product prices: STARTER `$199` / month and PRO `$499` / month. Enterprise stays custom.
+2. Set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_PLAN_STARTER`, and `RAZORPAY_PLAN_PRO`.
+3. Keep `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET` server-side only. Do not add `NEXT_PUBLIC_` copies of those values.
+4. Checkout uses `https://checkout.razorpay.com/v1/checkout.js`. The Key ID is passed from the server with the `subscription_id`.
+5. After Checkout.js returns `razorpay_payment_id`, `razorpay_subscription_id`, and `razorpay_signature`, the server verifies HMAC-SHA256 of `payment_id|subscription_id` with the Key Secret, then fetches the subscription from Razorpay before updating the database.
+6. Webhook destination: `https://YOUR_DOMAIN/api/webhooks/razorpay` (local example: `{NEXT_PUBLIC_APP_URL}/api/webhooks/razorpay`).
+7. Subscribe at least to:
+   - `subscription.authenticated`
+   - `subscription.activated`
+   - `subscription.charged`
+   - `subscription.pending`
+   - `subscription.halted`
+   - `subscription.cancelled`
+   - `subscription.completed`
+   - `payment.failed`
+8. The webhook verifies `X-Razorpay-Signature` against the raw body using `RAZORPAY_WEBHOOK_SECRET`. If that secret is empty, the route returns 503.
+9. Subscription state in Postgres is authoritative. The browser is never trusted for price, plan ID, payment success, or entitlement.
+10. The Al Noor demo organization is never charged.
+
+## Paddle setup (fallback)
+
+Paddle is unused while Razorpay is enabled. Do not use Stripe. Business logic still talks to `PaymentProvider`; `PaddlePaymentProvider` is the fallback implementation.
 
 1. Create a Paddle sandbox (then live) account.
 2. Create STARTER ($199/month) and PRO ($499/month) recurring prices. Enterprise can stay custom.
@@ -219,24 +256,29 @@ Call every 5–15 minutes. Production fails closed without `CRON_SECRET`. Jobs a
 7. Connect WhatsApp and send a confirmed test message.
 8. Create a reactivation campaign, preview, owner confirms, then send.
 9. Embed the website chatbot widget.
-10. Owner starts a Paddle subscription from Billing.
-11. Point Meta and Paddle webhooks at the HTTPS production URLs.
+10. Owner starts a Razorpay subscription from Billing.
+11. Point Meta and Razorpay webhooks at the HTTPS production URLs.
 12. Confirm cron is running.
 
 ## Security notes
 
 - Every lead, follow-up, automation and revenue query is scoped by `organizationId` from the session or a hashed API key — never from the browser body.
 - Agents only see assigned leads.
-- WhatsApp and Paddle webhooks verify signatures / tenant config.
-- Cron fails closed in production without `CRON_SECRET`.
-- JSON payloads over 100KB are rejected.
+- WhatsApp Meta payloads require `X-Hub-Signature-256`. Custom inbound JSON still uses the integration secret. `GET /api/webhooks/inbound` without a valid hub challenge returns 403.
+- Razorpay webhooks verify `X-Razorpay-Signature`, reject events older than 48 hours, and ignore duplicate event IDs. Organization mapping is subscription id, then customer id, then notes (org must exist).
+- Cron fails closed in production without `CRON_SECRET`. Failed cron auth is logged.
+- JSON payloads over 100KB are rejected. Server Actions are capped at 2MB.
 - API keys are hashed. WhatsApp tokens are never returned in full.
-- Never log passwords, API keys, WhatsApp tokens, Paddle secrets, Clerk secrets, or OpenAI keys.
+- Never log passwords, API keys, WhatsApp tokens, Razorpay secrets, Paddle secrets, Clerk secrets, or OpenAI keys.
+- Production security headers include CSP (Clerk + Razorpay + Unsplash), HSTS, `X-Content-Type-Options`, `X-Frame-Options: DENY`, Referrer-Policy, and Permissions-Policy. Authenticated API and app routes send `Cache-Control: private, no-store`.
+- CORS `Access-Control-Allow-Origin: *` is only for the public chatbot widget (`/widget.js` and `POST /api/chat`) and never with credentials. Private APIs do not allow arbitrary origins.
+- Rate limits are per endpoint class (auth, billing, AI, search, ingest, chat, webhooks, uploads, cron, authenticated actions). On Vercel they use Runtime Cache (`@vercel/functions` `getCache`). Locally they fall back to in-memory buckets.
 
 ## Known limitations
 
-- Clerk, Paddle and Resend are optional until their keys are set. Local Auth.js demo login remains.
-- Rate limits are in-memory per instance.
+- Clerk, Razorpay, Paddle and Resend are optional until their keys are set. Local Auth.js demo login remains.
+- Clerk-hosted sign-in/sign-up API calls are rate-limited by Clerk. ReviveLead rate-limits its own Auth.js POSTs, password reset actions, and non-GET hits to `/sign-in` and `/sign-up`.
+- Local/dev rate limits are in-memory per process. Production Vercel uses Runtime Cache, which is shared per region but is not a dedicated Redis store.
 - Credential encryption at rest is not implemented.
 - SQLite is for local development only.
 - HubSpot, Salesforce, Zoho, Pipedrive, Google Sheets and Google Calendar are abstracted, not implemented.
