@@ -13,7 +13,8 @@ import {
   AuthNotice,
   GoogleButton,
 } from "@/components/auth/auth-fields";
-import { firstClerkMessage, friendlyAuthMessage } from "@/lib/auth/clerk-errors";
+import { firstClerkMessage, friendlyAuthMessage, clerkThrownMessage } from "@/lib/auth/clerk-errors";
+import { browserOAuthUrls } from "@/lib/auth/clerk-oauth";
 
 function splitName(value: string) {
   const trimmed = value.trim();
@@ -144,17 +145,24 @@ export function ClerkSignUpForm() {
   }
 
   async function onGoogle() {
-    if (!signUp) return;
+    if (!signUp) {
+      setLocalError("Google sign-up is still loading. Try again in a moment.");
+      return;
+    }
     setLocalError(null);
-    const { firstName, lastName } = splitName(name);
-    const { error } = await signUp.sso({
-      strategy: "oauth_google",
-      redirectUrl: "/onboarding",
-      redirectCallbackUrl: "/sign-up/sso-callback",
-      firstName,
-      lastName,
-    });
-    if (error) setLocalError(friendlyAuthMessage(error.code, error.longMessage ?? error.message));
+    try {
+      const { error } = await signUp.sso({
+        strategy: "oauth_google",
+        ...browserOAuthUrls("/sign-up/sso-callback", "/onboarding"),
+      });
+      if (error) {
+        console.error("[ReviveLead] Clerk Google sign-up failed", error);
+        setLocalError(friendlyAuthMessage(error.code, error.longMessage ?? error.message));
+      }
+    } catch (error) {
+      console.error("[ReviveLead] Clerk Google sign-up failed", error);
+      setLocalError(clerkThrownMessage(error));
+    }
   }
 
   if (isSignedIn) return <AuthFormSkeleton />;

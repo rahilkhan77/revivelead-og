@@ -2,15 +2,15 @@ export function contentSecurityPolicy() {
   return [
     "default-src 'self'",
     "base-uri 'self'",
-    "form-action 'self'",
+    "form-action 'self' https://*.clerk.accounts.dev https://*.clerk.com https://accounts.google.com https://*.google.com https://accounts.google.co.in",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://*.razorpay.com https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://*.razorpay.com https://*.clerk.accounts.dev https://*.clerk.com https://js.clerk.dev https://challenges.cloudflare.com",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://images.unsplash.com https://img.clerk.com https://*.clerk.com https://*.razorpay.com",
+    "img-src 'self' data: blob: https://images.unsplash.com https://img.clerk.com https://*.clerk.com https://*.googleusercontent.com https://*.razorpay.com",
     "font-src 'self' data:",
-    "connect-src 'self' https://api.razorpay.com https://*.razorpay.com https://*.clerk.accounts.dev https://*.clerk.com https://api.clerk.com https://clerk-telemetry.com https://challenges.cloudflare.com wss://*.clerk.accounts.dev",
-    "frame-src https://checkout.razorpay.com https://api.razorpay.com https://*.razorpay.com https://*.clerk.com https://*.clerk.accounts.dev https://challenges.cloudflare.com",
+    "connect-src 'self' https://api.razorpay.com https://*.razorpay.com https://*.clerk.accounts.dev https://*.clerk.com https://api.clerk.com https://clerk-telemetry.com https://js.clerk.dev https://challenges.cloudflare.com https://accounts.google.com wss://*.clerk.accounts.dev",
+    "frame-src https://checkout.razorpay.com https://api.razorpay.com https://*.razorpay.com https://*.clerk.com https://*.clerk.accounts.dev https://accounts.google.com https://challenges.cloudflare.com",
     "worker-src 'self' blob:",
   ].join("; ");
 }

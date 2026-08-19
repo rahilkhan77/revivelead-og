@@ -13,7 +13,8 @@ import {
   AuthNotice,
   GoogleButton,
 } from "@/components/auth/auth-fields";
-import { firstClerkMessage, friendlyAuthMessage } from "@/lib/auth/clerk-errors";
+import { clerkThrownMessage, firstClerkMessage, friendlyAuthMessage } from "@/lib/auth/clerk-errors";
+import { browserOAuthUrls } from "@/lib/auth/clerk-oauth";
 
 type Step = "sign-in" | "reset-email" | "reset-code" | "reset-password" | "verify";
 
@@ -103,14 +104,24 @@ export function ClerkSignInForm({ startReset = false }: { startReset?: boolean }
   }
 
   async function onGoogle() {
-    if (!signIn) return;
+    if (!signIn) {
+      setLocalError("Google sign-in is still loading. Try again in a moment.");
+      return;
+    }
     setLocalError(null);
-    const { error } = await signIn.sso({
-      strategy: "oauth_google",
-      redirectUrl: "/dashboard",
-      redirectCallbackUrl: "/sign-in/sso-callback",
-    });
-    if (error) setLocalError(friendlyAuthMessage(error.code, error.longMessage ?? error.message));
+    try {
+      const { error } = await signIn.sso({
+        strategy: "oauth_google",
+        ...browserOAuthUrls("/sign-in/sso-callback", "/dashboard"),
+      });
+      if (error) {
+        console.error("[ReviveLead] Clerk Google sign-in failed", error);
+        setLocalError(friendlyAuthMessage(error.code, error.longMessage ?? error.message));
+      }
+    } catch (error) {
+      console.error("[ReviveLead] Clerk Google sign-in failed", error);
+      setLocalError(clerkThrownMessage(error));
+    }
   }
 
   async function onSendReset(event: React.FormEvent<HTMLFormElement>) {

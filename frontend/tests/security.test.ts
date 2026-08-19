@@ -8,6 +8,7 @@ import { sanitizeSearchQuery, tooManyRequests } from "@/lib/http";
 import { parseSpreadsheet, validateImportRow } from "@/lib/import/parse";
 import { rateLimit } from "@/lib/rate-limit";
 import { inviteRoleSchema } from "@/lib/roles";
+import { clerkOAuthUrls } from "@/lib/auth/clerk-oauth";
 import { contentSecurityPolicy } from "@/lib/security-headers";
 import { claimWebhookEvent } from "@/lib/webhooks/idempotency";
 import { verifyMetaSignature } from "@/lib/whatsapp/inbound";
@@ -75,11 +76,21 @@ describe("production security controls", () => {
     expect(response.headers.get("Retry-After")).toBe("30");
   });
 
-  it("keeps CSP compatible with Clerk and Razorpay", () => {
+  it("keeps CSP compatible with Clerk, Razorpay, and Google OAuth", () => {
     const csp = contentSecurityPolicy();
     expect(csp).toContain("https://checkout.razorpay.com");
     expect(csp).toContain("https://*.clerk.com");
+    expect(csp).toContain("https://accounts.google.com");
+    expect(csp).toContain("form-action 'self' https://*.clerk.accounts.dev");
     expect(csp).toContain("frame-ancestors 'none'");
+  });
+
+  it("builds absolute Clerk OAuth URLs from the current origin", () => {
+    const urls = clerkOAuthUrls("https://revivelead-og.vercel.app", "/sign-up/sso-callback", "/onboarding");
+    expect(urls.redirectCallbackUrl).toBe("https://revivelead-og.vercel.app/sign-up/sso-callback");
+    expect(urls.redirectUrl).toBe("https://revivelead-og.vercel.app/onboarding");
+    expect(urls.redirectCallbackUrl).not.toContain("localhost");
+    expect(urls.redirectUrl).not.toContain("localhost");
   });
 
   it("truncates search queries and rejects unsigned Meta signatures", () => {

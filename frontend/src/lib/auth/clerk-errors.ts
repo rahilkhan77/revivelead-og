@@ -16,6 +16,7 @@ const USER_MESSAGES: Record<string, string> = {
   strategy_for_user_invalid: "Invalid email or password.",
   oauth_access_denied: "Google sign-in was cancelled.",
   oauth_identities_missing: "Google could not complete sign-in. Try email instead.",
+  oauth_provider_not_enabled: "Google sign-in is not available right now.",
 };
 
 function looksInternal(message: string) {
@@ -30,6 +31,15 @@ export function friendlyAuthMessage(code?: string | null, fallback?: string | nu
 }
 
 type ClerkFieldError = { code?: string; message?: string; longMessage?: string } | null;
+
+export function clerkThrownMessage(error: unknown) {
+  if (error && typeof error === "object") {
+    const value = error as { code?: string; longMessage?: string; message?: string };
+    return friendlyAuthMessage(value.code, value.longMessage ?? value.message);
+  }
+  if (error instanceof Error) return friendlyAuthMessage(undefined, error.message);
+  return friendlyAuthMessage();
+}
 
 export function firstClerkMessage(errors?: unknown) {
   if (!errors || typeof errors !== "object") return null;
