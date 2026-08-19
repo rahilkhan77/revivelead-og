@@ -102,6 +102,7 @@ describe("production security controls", () => {
     expect(formAction).toContain("https://clerk.frontend-2-gray.vercel.app");
     expect(formAction).toContain("https://*.clerk.accounts.dev");
     expect(formAction).toContain("https://accounts.google.com");
+    expect(formAction).toContain("https://accounts.revivelead-og.vercel.app");
     expect(formAction).toContain("https://*.google.com");
     expect(formAction).toContain("https://*.shared.lcl.dev");
 

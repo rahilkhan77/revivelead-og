@@ -1,4 +1,5 @@
-const PRODUCTION_CLERK_FRONTEND_API = "https://clerk.frontend-2-gray.vercel.app";
+const PRODUCTION_CLERK_FRONTEND_API = "https://clerk.revivelead-og.vercel.app";
+const PRODUCTION_CLERK_ACCOUNTS = "https://accounts.revivelead-og.vercel.app";
 const CLERK_PROTECT = "https://*.protect.clerk.com";
 const CLERK_PROTECT_CONNECT = "https://*.protect.clerk.com:*";
 
@@ -83,6 +84,7 @@ export function contentSecurityPolicy(options?: { clerkFrontendApi?: string | nu
   const clerkConnect = [
     ...fapiOrigins,
     ...fapiSockets,
+    PRODUCTION_CLERK_ACCOUNTS,
     "https://*.clerk.accounts.dev",
     "wss://*.clerk.accounts.dev",
     "https://*.clerk.com",
@@ -104,6 +106,7 @@ export function contentSecurityPolicy(options?: { clerkFrontendApi?: string | nu
   const clerkFrames = [
     "'self'",
     ...fapiOrigins,
+    PRODUCTION_CLERK_ACCOUNTS,
     "https://*.clerk.accounts.dev",
     "https://*.clerk.com",
     "https://*.lcl.dev",
@@ -124,6 +127,7 @@ export function contentSecurityPolicy(options?: { clerkFrontendApi?: string | nu
   const clerkForms = [
     "'self'",
     ...fapiOrigins,
+    PRODUCTION_CLERK_ACCOUNTS,
     "https://*.clerk.accounts.dev",
     "https://*.clerk.com",
     "https://*.lcl.dev",
