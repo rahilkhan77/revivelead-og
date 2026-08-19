@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useAuth, useSignUp } from "@clerk/nextjs";
+import { useAuth, useClerk, useSignUp } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import {
   AuthDivider,
@@ -30,6 +30,7 @@ export function ClerkSignUpForm() {
   const router = useRouter();
   const pathname = usePathname();
   const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const { loaded: clerkLoaded } = useClerk();
   const { signUp, errors, fetchStatus } = useSignUp();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -166,7 +167,7 @@ export function ClerkSignUpForm() {
   }
 
   if (isSignedIn) return <AuthFormSkeleton />;
-  const ready = Boolean(signUp);
+  const ready = clerkLoaded && authLoaded && Boolean(signUp);
   const blocked = busy || !ready;
 
   if (needsEmailVerification) {
