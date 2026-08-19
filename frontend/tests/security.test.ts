@@ -9,7 +9,16 @@ import { parseSpreadsheet, validateImportRow } from "@/lib/import/parse";
 import { rateLimit } from "@/lib/rate-limit";
 import { inviteRoleSchema } from "@/lib/roles";
 import { clerkOAuthUrls } from "@/lib/auth/clerk-oauth";
-import { contentSecurityPolicy } from "@/lib/security-headers";
+import {
+  clerkFrontendApiOriginFromPublishableKey,
+  contentSecurityPolicy,
+} from "@/lib/security-headers";
+
+function cspDirective(csp: string, name: string) {
+  const part = csp.split("; ").find((item) => item.startsWith(`${name} `));
+  expect(part).toBeTruthy();
+  return part as string;
+}
 import { claimWebhookEvent } from "@/lib/webhooks/idempotency";
 import { verifyMetaSignature } from "@/lib/whatsapp/inbound";
 
@@ -77,20 +86,64 @@ describe("production security controls", () => {
   });
 
   it("keeps CSP compatible with Clerk, Razorpay, and Google OAuth", () => {
-    const csp = contentSecurityPolicy();
+    const csp = contentSecurityPolicy({
+      clerkFrontendApi: "https://clerk.frontend-2-gray.vercel.app",
+    });
     expect(csp).toContain("https://checkout.razorpay.com");
     expect(csp).toContain("https://*.clerk.com");
     expect(csp).toContain("https://accounts.google.com");
-    expect(csp).toContain("form-action 'self' https://*.clerk.accounts.dev");
     expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).not.toMatch(/default-src \*/);
+    expect(csp).not.toMatch(/script-src \*/);
+    expect(csp).not.toMatch(/connect-src \*/);
+
+    const formAction = cspDirective(csp, "form-action");
+    expect(formAction).toContain("'self'");
+    expect(formAction).toContain("https://clerk.frontend-2-gray.vercel.app");
+    expect(formAction).toContain("https://*.clerk.accounts.dev");
+    expect(formAction).toContain("https://accounts.google.com");
+    expect(formAction).toContain("https://*.google.com");
+    expect(formAction).toContain("https://*.shared.lcl.dev");
+
+    const scriptSrc = cspDirective(csp, "script-src");
+    expect(scriptSrc).toContain("https://clerk.frontend-2-gray.vercel.app");
+    expect(scriptSrc).toContain("https://*.protect.clerk.com");
+    expect(scriptSrc).toContain("https://challenges.cloudflare.com");
+
+    const connectSrc = cspDirective(csp, "connect-src");
+    expect(connectSrc).toContain("https://clerk.frontend-2-gray.vercel.app");
+    expect(connectSrc).toContain("wss://clerk.frontend-2-gray.vercel.app");
+    expect(connectSrc).toContain("https://*.protect.clerk.com");
+    expect(connectSrc).toContain("https://*.clerk-telemetry.com");
+
+    const frameSrc = cspDirective(csp, "frame-src");
+    expect(frameSrc).toContain("'self'");
+    expect(frameSrc).toContain("https://*.protect.clerk.com");
+    expect(frameSrc).toContain("https://challenges.cloudflare.com");
+    expect(frameSrc).toContain("https://accounts.google.com");
+
+    const imgSrc = cspDirective(csp, "img-src");
+    expect(imgSrc).toContain("https://img.clerk.com");
+    expect(imgSrc).toContain("https://*.protect.clerk.com");
+    expect(imgSrc).toContain("https://challenges.cloudflare.com");
+  });
+
+  it("decodes the Clerk Frontend API host from a publishable key", () => {
+    const encoded = Buffer.from("clerk.frontend-2-gray.vercel.app$").toString("base64");
+    expect(clerkFrontendApiOriginFromPublishableKey(`pk_live_${encoded}`)).toBe(
+      "https://clerk.frontend-2-gray.vercel.app",
+    );
   });
 
   it("builds absolute Clerk OAuth URLs from the current origin", () => {
-    const urls = clerkOAuthUrls("https://revivelead-og.vercel.app", "/sign-up/sso-callback", "/onboarding");
-    expect(urls.redirectCallbackUrl).toBe("https://revivelead-og.vercel.app/sign-up/sso-callback");
-    expect(urls.redirectUrl).toBe("https://revivelead-og.vercel.app/onboarding");
-    expect(urls.redirectCallbackUrl).not.toContain("localhost");
-    expect(urls.redirectUrl).not.toContain("localhost");
+    const signUp = clerkOAuthUrls("https://revivelead-og.vercel.app", "/sign-up/sso-callback", "/onboarding");
+    expect(signUp.redirectCallbackUrl).toBe("https://revivelead-og.vercel.app/sign-up/sso-callback");
+    expect(signUp.redirectUrl).toBe("https://revivelead-og.vercel.app/onboarding");
+    const signIn = clerkOAuthUrls("https://revivelead-og.vercel.app", "/sign-in/sso-callback", "/dashboard");
+    expect(signIn.redirectCallbackUrl).toBe("https://revivelead-og.vercel.app/sign-in/sso-callback");
+    expect(signIn.redirectUrl).toBe("https://revivelead-og.vercel.app/dashboard");
+    expect(signUp.redirectCallbackUrl).not.toContain("localhost");
+    expect(signUp.redirectUrl).not.toContain("localhost");
   });
 
   it("truncates search queries and rejects unsigned Meta signatures", () => {
