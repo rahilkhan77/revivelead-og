@@ -2,6 +2,10 @@ const PRODUCTION_CLERK_FRONTEND_API = "https://clerk.revivelead-og.vercel.app";
 const PRODUCTION_CLERK_ACCOUNTS = "https://accounts.revivelead-og.vercel.app";
 const CLERK_PROTECT = "https://*.protect.clerk.com";
 const CLERK_PROTECT_CONNECT = "https://*.protect.clerk.com:*";
+const CLOUDFLARE_CHALLENGES = [
+  "https://challenges.cloudflare.com",
+  "https://*.challenges.cloudflare.com",
+];
 
 function sourceList(...parts: Array<string | string[] | null | undefined>) {
   const seen = new Set<string>();
@@ -79,7 +83,7 @@ export function contentSecurityPolicy(options?: { clerkFrontendApi?: string | nu
     "https://*.shared.lcl.dev",
     "https://*.lclclerk.com",
     CLERK_PROTECT,
-    "https://challenges.cloudflare.com",
+    ...CLOUDFLARE_CHALLENGES,
   ];
   const clerkConnect = [
     ...fapiOrigins,
@@ -101,7 +105,7 @@ export function contentSecurityPolicy(options?: { clerkFrontendApi?: string | nu
     "wss://*.lclclerk.com",
     CLERK_PROTECT,
     CLERK_PROTECT_CONNECT,
-    "https://challenges.cloudflare.com",
+    ...CLOUDFLARE_CHALLENGES,
   ];
   const clerkFrames = [
     "'self'",
@@ -113,7 +117,7 @@ export function contentSecurityPolicy(options?: { clerkFrontendApi?: string | nu
     "https://*.shared.lcl.dev",
     "https://*.lclclerk.com",
     CLERK_PROTECT,
-    "https://challenges.cloudflare.com",
+    ...CLOUDFLARE_CHALLENGES,
     "https://accounts.google.com",
   ];
   const clerkImages = [
@@ -121,7 +125,7 @@ export function contentSecurityPolicy(options?: { clerkFrontendApi?: string | nu
     "https://img.clerk.com",
     "https://*.clerk.com",
     CLERK_PROTECT,
-    "https://challenges.cloudflare.com",
+    ...CLOUDFLARE_CHALLENGES,
     "https://*.googleusercontent.com",
   ];
   const clerkForms = [
@@ -146,12 +150,12 @@ export function contentSecurityPolicy(options?: { clerkFrontendApi?: string | nu
     "frame-ancestors 'none'",
     "object-src 'none'",
     `script-src ${sourceList("'self'", "'unsafe-inline'", "'unsafe-eval'", "https://checkout.razorpay.com", "https://*.razorpay.com", clerkScript)}`,
-    "style-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+    "style-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://*.challenges.cloudflare.com",
     `img-src ${sourceList("'self'", "data:", "blob:", "https://images.unsplash.com", "https://*.razorpay.com", clerkImages)}`,
-    `font-src ${sourceList("'self'", "data:", CLERK_PROTECT, "https://challenges.cloudflare.com")}`,
+    `font-src ${sourceList("'self'", "data:", CLERK_PROTECT, CLOUDFLARE_CHALLENGES)}`,
     `connect-src ${sourceList("'self'", "https://api.razorpay.com", "https://*.razorpay.com", "https://accounts.google.com", clerkConnect)}`,
     `frame-src ${sourceList("https://checkout.razorpay.com", "https://api.razorpay.com", "https://*.razorpay.com", clerkFrames)}`,
-    "worker-src 'self' blob:",
+    "worker-src 'self' blob: https://challenges.cloudflare.com https://*.challenges.cloudflare.com",
   ].join("; ");
 }
 

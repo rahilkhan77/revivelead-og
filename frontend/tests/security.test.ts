@@ -110,23 +110,34 @@ describe("production security controls", () => {
     expect(scriptSrc).toContain("https://clerk.frontend-2-gray.vercel.app");
     expect(scriptSrc).toContain("https://*.protect.clerk.com");
     expect(scriptSrc).toContain("https://challenges.cloudflare.com");
+    expect(scriptSrc).toContain("https://*.challenges.cloudflare.com");
 
     const connectSrc = cspDirective(csp, "connect-src");
     expect(connectSrc).toContain("https://clerk.frontend-2-gray.vercel.app");
     expect(connectSrc).toContain("wss://clerk.frontend-2-gray.vercel.app");
     expect(connectSrc).toContain("https://*.protect.clerk.com");
     expect(connectSrc).toContain("https://*.clerk-telemetry.com");
+    expect(connectSrc).toContain("https://*.challenges.cloudflare.com");
 
     const frameSrc = cspDirective(csp, "frame-src");
     expect(frameSrc).toContain("'self'");
     expect(frameSrc).toContain("https://*.protect.clerk.com");
     expect(frameSrc).toContain("https://challenges.cloudflare.com");
+    expect(frameSrc).toContain("https://*.challenges.cloudflare.com");
     expect(frameSrc).toContain("https://accounts.google.com");
 
     const imgSrc = cspDirective(csp, "img-src");
     expect(imgSrc).toContain("https://img.clerk.com");
     expect(imgSrc).toContain("https://*.protect.clerk.com");
     expect(imgSrc).toContain("https://challenges.cloudflare.com");
+    expect(imgSrc).toContain("https://*.challenges.cloudflare.com");
+
+    const styleSrc = cspDirective(csp, "style-src");
+    expect(styleSrc).toContain("https://*.challenges.cloudflare.com");
+
+    const workerSrc = cspDirective(csp, "worker-src");
+    expect(workerSrc).toContain("https://challenges.cloudflare.com");
+    expect(workerSrc).toContain("https://*.challenges.cloudflare.com");
   });
 
   it("decodes the Clerk Frontend API host from a publishable key", () => {

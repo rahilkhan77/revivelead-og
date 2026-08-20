@@ -87,38 +87,46 @@ export function ClerkSignUpForm() {
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!signUp) return;
+    if (!signUp || typeof signUp.password !== "function") {
+      setLocalError("Sign-up is still loading. Try again in a moment.");
+      return;
+    }
     setLocalError(null);
-    const { firstName, lastName } = splitName(name);
-    const { error } = await signUp.password({
-      emailAddress: email.trim(),
-      password,
-      firstName,
-      lastName,
-    });
-    if (error) {
-      setLocalError(
-        error.code === "form_identifier_exists"
-          ? "An account with this email already exists."
-          : friendlyAuthMessage(error.code, error.longMessage ?? error.message),
-      );
-      return;
-    }
-    if (signUp.isTransferable) {
-      setLocalError("An account with this email already exists.");
-      return;
-    }
-    if (signUp.status === "complete") {
-      await complete();
-      return;
-    }
-    if (signUp.unverifiedFields.includes("email_address")) {
-      const sent = await signUp.verifications.sendEmailCode();
-      if (sent.error) {
-        setLocalError(friendlyAuthMessage(sent.error.code, sent.error.longMessage ?? sent.error.message));
+    try {
+      const { firstName, lastName } = splitName(name);
+      const { error } = await signUp.password({
+        emailAddress: email.trim(),
+        password,
+        firstName,
+        lastName,
+      });
+      if (error) {
+        setLocalError(
+          error.code === "form_identifier_exists"
+            ? "An account with this email already exists."
+            : friendlyAuthMessage(error.code, error.longMessage ?? error.message),
+        );
         return;
       }
-      setNotice("Verification required. Enter the code we emailed you.");
+      if (signUp.isTransferable) {
+        setLocalError("An account with this email already exists.");
+        return;
+      }
+      if (signUp.status === "complete") {
+        await complete();
+        return;
+      }
+      if (signUp.unverifiedFields.includes("email_address")) {
+        const sent = await signUp.verifications.sendEmailCode();
+        if (sent.error) {
+          setLocalError(friendlyAuthMessage(sent.error.code, sent.error.longMessage ?? sent.error.message));
+          return;
+        }
+        setNotice("Verification required. Enter the code we emailed you.");
+      }
+    } catch (error) {
+      console.error("[ReviveLead] Clerk email sign-up failed", error);
+      setLocalError(clerkThrownMessage(error));
     }
   }
 
@@ -146,7 +154,7 @@ export function ClerkSignUpForm() {
   }
 
   async function onGoogle() {
-    if (!signUp) {
+    if (!signUp || typeof signUp.sso !== "function") {
       setLocalError("Google sign-up is still loading. Try again in a moment.");
       return;
     }
@@ -167,7 +175,11 @@ export function ClerkSignUpForm() {
   }
 
   if (isSignedIn) return <AuthFormSkeleton />;
-  const ready = clerkLoaded && authLoaded && Boolean(signUp);
+  const ready =
+    clerkLoaded &&
+    authLoaded &&
+    typeof signUp?.password === "function" &&
+    typeof signUp?.sso === "function";
   const blocked = busy || !ready;
 
   if (needsEmailVerification) {

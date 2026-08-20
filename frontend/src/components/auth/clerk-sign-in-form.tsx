@@ -105,7 +105,7 @@ export function ClerkSignInForm({ startReset = false }: { startReset?: boolean }
   }
 
   async function onGoogle() {
-    if (!signIn) {
+    if (!signIn || typeof signIn.sso !== "function") {
       setLocalError("Google sign-in is still loading. Try again in a moment.");
       return;
     }
@@ -185,7 +185,11 @@ export function ClerkSignInForm({ startReset = false }: { startReset?: boolean }
   }
 
   if (isSignedIn) return <AuthFormSkeleton />;
-  const ready = clerkLoaded && authLoaded && Boolean(signIn);
+  const ready =
+    clerkLoaded &&
+    authLoaded &&
+    typeof signIn?.password === "function" &&
+    typeof signIn?.sso === "function";
   const blocked = busy || !ready;
 
   if (view === "reset-email") {
