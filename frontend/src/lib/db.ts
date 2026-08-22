@@ -11,14 +11,19 @@ export function prismaDatasourceUrl(
   try {
     const parsed = new URL(raw);
     const port = parsed.port || "5432";
-    const pooledHost = /pooler|pgbouncer/i.test(parsed.hostname) || port === "6543";
+    const supabasePooler = /pooler\.supabase\.com$/i.test(parsed.hostname);
+    // Supabase :5432 on the pooler host is PgBouncer session mode (pool_size ~15).
+    // Prisma connection_limit>1 on Vercel Fluid exhausts it (EMAXCONNSESSION).
+    // Transaction mode (:6543) multiplexes serverless clients instead.
+    if (supabasePooler && port === "5432") {
+      parsed.port = "6543";
+    }
+    const pooledHost = supabasePooler || /pooler|pgbouncer/i.test(parsed.hostname) || parsed.port === "6543";
 
     if (!parsed.searchParams.has("connection_limit")) {
-      // Vercel Fluid Compute can run concurrent requests in one isolate.
-      // connection_limit=1 made dashboard/onboarding Promise.all wait out the pool (P2024).
       parsed.searchParams.set(
         "connection_limit",
-        options?.connectionLimit ?? process.env.PRISMA_CONNECTION_LIMIT ?? "10",
+        options?.connectionLimit ?? process.env.PRISMA_CONNECTION_LIMIT ?? "5",
       );
     }
     if (!parsed.searchParams.has("pool_timeout")) {
